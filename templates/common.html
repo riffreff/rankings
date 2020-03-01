@@ -1,0 +1,81 @@
+{{define "header"}}
+<!DOCTYPE html>
+  <html>
+  <head>
+  <title>Live Derby Stats</title>
+  <style>
+  body {
+    background-color: #c1946a;
+    color: #dddddd;
+    margin: 0;
+    font-family: sans-serif;
+  }
+  table {
+    margin: 2ex 0;
+  }
+  table, th, td {
+    border: 1px solid #aaaaaa;
+    border-collapse: collapse;
+  }
+  td, th {
+    padding: .5ex;
+  }
+  tbody tr:hover {
+    background-color: #506d37;
+  }
+
+  .heading {
+    font-family: serif;
+    text-align: center;
+    color: #82b74b;
+    background-color: #3e4444;
+  }
+  h1 {
+    margin-top: 0;
+    margin-bottom: 0;
+    font-size: 300%;
+  }
+  .subtitle {
+    font-size: 110%;
+    font-style: italic;
+  }
+
+  .main {
+    margin: 0;
+    padding: 2ex;
+    background-color: #405d27;
+    margin-left: 10%;
+    margin-right: 10%;
+  }
+  .main a {
+    color: #eeeeee;
+  }
+
+  .footer {
+    font-size: 70%;
+    text-align: center;
+  }
+
+
+  .ladder tr td:nth-child(1) {
+    text-align: right;
+  }
+  .ladder tr td:nth-child(3) {
+    text-align: right;
+  }
+  </style>
+  </head>
+  <body>
+  <div class="heading">
+  <h1>DerbyStats: Rankings</h1>
+  <div class="subtitle">Ordering for Roller Derby</div>
+  </div>
+  <div class="main">
+{{end}}
+
+{{define "footer"}}
+ <div class="footer"><a href="https://github.com/DerbyStats/">Source Code</a></div>
+</div> {{/* main */}}
+</body>
+</html>
+{{end}}

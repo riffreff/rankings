@@ -1,0 +1,15 @@
+{{template "header"}}
+<table class="ladder">
+  <thead>
+    <tr><th>Rank</th><th>Team</th><th>Rating</th></tr>
+  </thead>
+  <tbody>
+    {{range .}}<tr team="{{.Team}}">
+<td>{{.Rank}}</td>
+<td title="{{.TeamInfo.League}} {{.TeamInfo.Name}}
+{{.TeamInfo.Location}}">{{if eq "Travel Team" .TeamInfo.Type}}{{.TeamInfo.League}}{{else}}{{.TeamInfo.Name}}{{end}}</td>
+<td>{{printf "%.1f" .Rating}}</td>
+</tr>{{end}}
+  </tbody>
+</table>
+{{template "footer"}}
