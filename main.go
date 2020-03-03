@@ -99,34 +99,41 @@ func GetTeamsWithGamesInPastYear(db *sql.DB, teams []int) (map[int]struct{}, err
 	return result, err
 }
 
-func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.Request) {
-	ranker := NewRanker()
-	rows, err := db.Query(`
-    SELECT Games.tournament IS NOT NULL, tourH.team is NOT NULL, tourA.team is NOT NULL, 
-    Games.homeTeam, Games.awayTeam, Games.homeScore, Games.awayScore 
-    FROM Games 
-    JOIN Teams AS teamH ON teamH.team = Games.homeTeam
-    JOIN Teams AS teamA ON teamA.team = Games.awayTeam
-    LEFT JOIN TournamentHostingTeams AS tourH ON tourH.tournament = Games.tournament AND tourH.team = Games.homeTeam
-    LEFT JOIN TournamentHostingTeams AS tourA ON tourA.tournament = Games.tournament AND tourA.team = Games.awayTeam
-    WHERE 
-    teamH.type != "Exhibition Team" AND teamA.type != "Exhibition Team"
-    AND teamH.genus = "Women" AND teamA.genus = "Women"
-    AND homeScore IS NOT NULL AND awayScore IS NOT NULL
-    ORDER BY day, time, game`)
+func getRanking(db *sql.DB, genus string, region string) (map[int]int, error) {
+	params := []interface{}{}
+	query := `SELECT Games.tournament IS NOT NULL, tourH.team is NOT NULL, tourA.team is NOT NULL, 
+  Games.homeTeam, Games.awayTeam, Games.homeScore, Games.awayScore 
+  FROM Games 
+  JOIN Teams AS teamH ON teamH.team = Games.homeTeam
+  JOIN Teams AS teamA ON teamA.team = Games.awayTeam
+  LEFT JOIN TournamentHostingTeams AS tourH ON tourH.tournament = Games.tournament AND tourH.team = Games.homeTeam
+  LEFT JOIN TournamentHostingTeams AS tourA ON tourA.tournament = Games.tournament AND tourA.team = Games.awayTeam
+  WHERE 
+  teamH.type != "Exhibition Team" AND teamA.type != "Exhibition Team"
+  AND homeScore IS NOT NULL AND awayScore IS NOT NULL`
+
+	if genus != "" {
+		query += ` AND teamH.genus=? AND teamA.genus=?`
+		params = append(params, genus, genus)
+	}
+	if region != "" {
+		query += ` AND teamH.region=? AND teamA.region=?`
+		params = append(params, region, region)
+	}
+
+	query += `  ORDER BY day, time, game`
+	rows, err := db.Query(query, params...)
 	if err != nil {
-		level.Error(logger).Log("err", err)
-		http.Error(w, err.Error(), 500)
-		return
+		return nil, err
 	}
 	defer rows.Close()
+
+	ranker := NewRanker()
 	for rows.Next() {
 		gr := &GameResult{}
 		if err := rows.Scan(&gr.isTournament, &gr.homeHostingTournament, &gr.awayHostingTournament,
 			&gr.homeTeam, &gr.awayTeam, &gr.homeScore, &gr.awayScore); err != nil {
-			level.Error(logger).Log("err", err)
-			http.Error(w, err.Error(), 500)
-			return
+			return nil, err
 		}
 		ranker.AddGame(gr)
 	}
@@ -136,10 +143,29 @@ func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.R
 	// Filter out teams who have have had no games in the past year, and none planned.
 	teams := make([]int, 0, len(rankings))
 	for k, _ := range rankings {
-
 		teams = append(teams, k)
 	}
 	activeTeams, err := GetTeamsWithGamesInPastYear(db, teams)
+	if err != nil {
+		return nil, err
+	}
+	activeRankings := make(map[int]int, len(activeTeams))
+	for team, _ := range activeTeams {
+		activeRankings[team] = rankings[team]
+	}
+	return activeRankings, nil
+}
+
+func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	genus := r.URL.Query().Get("genus")
+	if _, ok := r.URL.Query()["genus"]; !ok {
+		genus = "Women" // No paramater specified.
+	}
+	region := r.URL.Query().Get("region")
+	genera := []string{"Women", "Men", "Open to All"}
+	regions := []string{"", "Northern America", "Latin America", "Europe", "Pacific"}
+
+	rankings, err := getRanking(db, genus, region)
 	if err != nil {
 		level.Error(logger).Log("err", err)
 		http.Error(w, err.Error(), 500)
@@ -147,8 +173,8 @@ func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.R
 	}
 
 	// Sort the teams by rankings.
-	ladder := make([]int, 0, len(activeTeams))
-	for k, _ := range activeTeams {
+	ladder := make([]int, 0, len(rankings))
+	for k, _ := range rankings {
 		ladder = append(ladder, k)
 	}
 	sort.Slice(ladder, func(i, j int) bool {
@@ -174,9 +200,21 @@ func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.R
 		TeamInfo TeamInfo
 		Rating   float64
 	}
-	data := make([]entry, len(ladder))
+	data := struct {
+		Regions  []string
+		Region   string
+		Genera   []string
+		Genus    string
+		Rankings []entry
+	}{
+		Region:  region,
+		Regions: regions,
+		Genus:   genus,
+		Genera:  genera,
+	}
+	data.Rankings = make([]entry, len(ladder))
 	for i, team := range ladder {
-		data[i] = entry{
+		data.Rankings[i] = entry{
 			Rank:     i + 1,
 			Team:     team,
 			TeamInfo: ti[team],

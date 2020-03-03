@@ -1,10 +1,28 @@
 {{template "header"}}
+
+{{ $dot := . }}
+
+<div class="selector">
+  {{range .Genera}}<span {{if eq . $dot.Genus}}class="selected"{{end}}>
+  <a href="?genus={{.}}&region={{$dot.Region}}">{{.}}</a>
+  </span>{{end}}
+</div>
+
+<div class="selector">
+  {{range .Regions}}
+  <span {{if eq . $dot.Region}}class="selected"{{end}}>
+    <a href="?genus={{$dot.Genus}}&region={{.}}">
+    {{if eq . ""}}Global{{else}}{{.}}{{end}}
+    </a>
+  </span>
+  {{end}}
+</div>
 <table class="ladder">
   <thead>
     <tr><th>Rank</th><th>Team</th><th>Rating</th></tr>
   </thead>
   <tbody>
-    {{range .}}<tr team="{{.Team}}">
+    {{range .Rankings}}<tr team="{{.Team}}">
 <td>{{.Rank}}</td>
 <td title="{{.TeamInfo.League}} {{.TeamInfo.Name}}
 {{.TeamInfo.Location}}">{{if eq "Travel Team" .TeamInfo.Type}}{{.TeamInfo.League}}{{else}}{{.TeamInfo.Name}}{{end}}</td>
@@ -12,4 +30,8 @@
 </tr>{{end}}
   </tbody>
 </table>
+
+<div>
+These rankings are based on data from <a href="http://flattrackstats.com/">Flat Track Stats</a>.
+</div>
 {{template "footer"}}
