@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"html/template"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/go-kit/kit/log"
@@ -156,20 +159,15 @@ func getRanking(db *sql.DB, genus string, region string) (map[int]int, error) {
 	return activeRankings, nil
 }
 
-func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.Request) {
-	genus := r.URL.Query().Get("genus")
-	if _, ok := r.URL.Query()["genus"]; !ok {
-		genus = "Women" // No paramater specified.
-	}
-	region := r.URL.Query().Get("region")
-	genera := []string{"Women", "Men", "Open to All"}
-	regions := []string{"", "Northern America", "Latin America", "Europe", "Pacific"}
+var (
+	genera  = []string{"Women", "Men", "Open to All"}
+	regions = []string{"", "Northern America", "Latin America", "Europe", "Pacific"}
+)
 
+func renderLadder(db *sql.DB, genus string, region string, w io.Writer) error {
 	rankings, err := getRanking(db, genus, region)
 	if err != nil {
-		level.Error(logger).Log("err", err)
-		http.Error(w, err.Error(), 500)
-		return
+		return err
 	}
 
 	// Sort the teams by rankings.
@@ -183,15 +181,11 @@ func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.R
 
 	ti, err := GetTeamInfo(db, ladder)
 	if err != nil {
-		level.Error(logger).Log("err", err)
-		http.Error(w, err.Error(), 500)
-		return
+		return err
 	}
 	tmpl, err := template.ParseFiles("templates/ladder.html", "templates/common.html")
 	if err != nil {
-		level.Error(logger).Log("err", err)
-		http.Error(w, err.Error(), 500)
-		return
+		return err
 	}
 
 	type entry struct {
@@ -221,12 +215,45 @@ func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.R
 			Rating:   float64(rankings[team]) / 10,
 		}
 	}
-	err = tmpl.Execute(w, data)
+	return tmpl.Execute(w, data)
+}
+
+var (
+	cacheMu = sync.Mutex{}
+	cache   = map[string]string{}
+)
+
+func serveLadder(logger log.Logger, db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	genus := r.URL.Query().Get("genus")
+	if _, ok := r.URL.Query()["genus"]; !ok {
+		genus = "Women" // No paramater specified.
+	}
+	region := r.URL.Query().Get("region")
+
+	key := genus + "#" + region
+
+	cacheMu.Lock()
+	str, ok := cache[key]
+	cacheMu.Unlock()
+
+	if ok {
+		w.Write([]byte(str))
+		return
+	}
+
+	buf := &bytes.Buffer{}
+	err := renderLadder(db, genus, region, buf)
 	if err != nil {
 		level.Error(logger).Log("err", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	str = string(buf.Bytes())
+
+	cacheMu.Lock()
+	cache[key] = str
+	cacheMu.Unlock()
+	w.Write([]byte(str))
 }
 
 func main() {
