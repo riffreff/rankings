@@ -2,6 +2,9 @@
 
 {{ $dot := . }}
 
+<div>Had enough of rankings? Look at <a href="https://live.derbystats.eu/">Live Scoreboards!</a></div>
+<br/>
+
 <div class="selector">
   {{range .Genera}}<span {{if eq . $dot.Genus}}class="selected"{{end}}>
   <a href="?genus={{.}}&region={{$dot.Region}}">{{.}}</a>
