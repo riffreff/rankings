@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kortemy/elo-go"
+	"math"
 )
 
 type GameResult struct {
@@ -17,13 +17,11 @@ type GameResult struct {
 
 type Ranker struct {
 	teams map[int]int
-	elo   elogo.Elo
 }
 
 func NewRanker() *Ranker {
 	return &Ranker{
 		teams: map[int]int{},
-		elo:   *elogo.NewEloWithFactors(1000, 2000),
 	}
 }
 
@@ -45,31 +43,33 @@ func (r *Ranker) AddGame(gr *GameResult) {
 		rankH = 7500
 		rankA = 7500
 	}
-	dos := float64(gr.homeScore) / float64(gr.homeScore+gr.awayScore)
+	// Allow for home team advantage.
+	homeAdj := 0
 	if !gr.isTournament {
-		// Allow for home team advantage.
-		dos -= .03
+		homeAdj = +200
 	} else {
-		// Considering anyone hosting a tournament as at home.
+		// Consider anyone hosting a tournament as at home.
 		if gr.homeHostingTournament && !gr.awayHostingTournament {
-			dos -= .03
+			homeAdj = +200
 		} else if !gr.homeHostingTournament && gr.awayHostingTournament {
-			dos += .03
+			homeAdj = -200
 		}
 	}
-	h, a := r.elo.Outcome(rankH, rankA, dos)
+	predictedDos := -1 + 2/(1+math.Exp(float64(rankA-rankH-homeAdj)/1000))
+	dos := float64(gr.homeScore-gr.awayScore) / float64(gr.homeScore+gr.awayScore)
+
+	adj := int((dos - predictedDos) * 600)
 
 	if okH && okA {
-		r.teams[gr.homeTeam] = h.Rating
-		r.teams[gr.awayTeam] = a.Rating
+		r.teams[gr.homeTeam] += adj
+		r.teams[gr.awayTeam] -= adj
 	}
-	// If one team was unranked, only set that team and over-apply the
-	// change to allow for not having history.
+	// If one team was unranked, only set that team.
 	if !okA {
-		r.teams[gr.awayTeam] = a.Rating + a.Delta*2
+		r.teams[gr.awayTeam] = rankA + adj
 	}
 	if !okH {
-		r.teams[gr.homeTeam] = h.Rating + h.Delta*2
+		r.teams[gr.homeTeam] = rankH + adj
 	}
 }
 

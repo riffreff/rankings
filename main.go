@@ -113,6 +113,7 @@ func getRanking(db *sql.DB, genus string, region string) (map[int]int, error) {
   LEFT JOIN TournamentHostingTeams AS tourA ON tourA.tournament = Games.tournament AND tourA.team = Games.awayTeam
   WHERE 
   teamH.type != "Exhibition Team" AND teamA.type != "Exhibition Team"
+  AND ruleset = "WFTDA"
   AND homeScore IS NOT NULL AND awayScore IS NOT NULL`
 
 	if genus != "" {
@@ -161,7 +162,7 @@ func getRanking(db *sql.DB, genus string, region string) (map[int]int, error) {
 
 var (
 	genera  = []string{"Women", "Men", "Open to All"}
-	regions = []string{"", "Northern America", "Latin America", "Europe", "Pacific"}
+	regions = []string{"", "Europe", "Northern America", "Latin America", "Pacific"}
 )
 
 func renderLadder(db *sql.DB, genus string, region string, w io.Writer) error {
