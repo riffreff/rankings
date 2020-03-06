@@ -102,7 +102,7 @@ func GetTeamsWithGamesInPastYear(db *sql.DB, teams []int) (map[int]struct{}, err
 	return result, err
 }
 
-func getRanking(db *sql.DB, genus string, region string) (map[int]int, error) {
+func getRanking(db *sql.DB, genus string) (map[int]int, error) {
 	params := []interface{}{}
 	query := `SELECT Games.tournament IS NOT NULL, tourH.team is NOT NULL, tourA.team is NOT NULL, 
   Games.homeTeam, Games.awayTeam, Games.homeScore, Games.awayScore 
@@ -119,10 +119,6 @@ func getRanking(db *sql.DB, genus string, region string) (map[int]int, error) {
 	if genus != "" {
 		query += ` AND teamH.genus=? AND teamA.genus=?`
 		params = append(params, genus, genus)
-	}
-	if region != "" {
-		query += ` AND teamH.region=? AND teamA.region=?`
-		params = append(params, region, region)
 	}
 
 	query += `  ORDER BY day, time, game`
@@ -166,7 +162,7 @@ var (
 )
 
 func renderLadder(db *sql.DB, genus string, region string, w io.Writer) error {
-	rankings, err := getRanking(db, genus, region)
+	rankings, err := getRanking(db, genus)
 	if err != nil {
 		return err
 	}
@@ -184,6 +180,7 @@ func renderLadder(db *sql.DB, genus string, region string, w io.Writer) error {
 	if err != nil {
 		return err
 	}
+
 	tmpl, err := template.ParseFiles("templates/ladder.html", "templates/common.html")
 	if err != nil {
 		return err
@@ -207,14 +204,19 @@ func renderLadder(db *sql.DB, genus string, region string, w io.Writer) error {
 		Genus:   genus,
 		Genera:  genera,
 	}
-	data.Rankings = make([]entry, len(ladder))
-	for i, team := range ladder {
-		data.Rankings[i] = entry{
-			Rank:     i + 1,
+	data.Rankings = make([]entry, 0, len(ladder))
+	rank := 0
+	for _, team := range ladder {
+		if region != "" && ti[team].Region != region {
+			continue
+		}
+		rank++
+		data.Rankings = append(data.Rankings, entry{
+			Rank:     rank,
 			Team:     team,
 			TeamInfo: ti[team],
 			Rating:   float64(rankings[team]) / 10,
-		}
+		})
 	}
 	return tmpl.Execute(w, data)
 }
